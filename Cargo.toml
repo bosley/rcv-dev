@@ -11,7 +11,13 @@ members = [".", "imsource"]
 name = "demo"
 path = "src/main.rs"
 
+
+[[bin]]
+name = "basic_contour"
+path = "src/basic_contour/main.rs"
+
 [dependencies]
 clap = "2.33.3"
 
+opencv = "0.46"
 imsource = { path = "./imsource" }
