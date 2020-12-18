@@ -1,12 +1,17 @@
 [package]
-name = "rcv-dev"
+name = "rcv_dev"
 version = "0.1.0"
 authors = ["bosley <bosley117@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [".", "imsource"]
+
+[[bin]]
+name = "demo"
+path = "src/main.rs"
 
 [dependencies]
+clap = "2.33.3"
 
-opencv = "0.46"
-derive_more = "0.99.11"
+imsource = { path = "./imsource" }

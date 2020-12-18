@@ -1,16 +1,21 @@
-extern crate rcv_dev;
+extern crate imsource;
+use std::{
+    env
+};
 
 use opencv::{
     highgui,
     prelude::*,
 };
 
-use rcv_dev::image_source::*;
-use rcv_dev::image_source::ImageSource;
+use imsource::image_source::*;
+use imsource::image_source::ImageSource;
 
 fn main() -> opencv::Result<()> {
 
-    let mut v_source = match VideoSource::new(0) {
+    let filename = env::args().skip(1).next().unwrap();
+
+    let mut f_source = match FileSource::new(filename) {
         Ok(source) => {
             source
         },
@@ -19,11 +24,11 @@ fn main() -> opencv::Result<()> {
         }
     };
 
-    let window = "video capture";
+    let window = "image capture";
     highgui::named_window(window, 1)?;
 
     loop {
-        let mut frame = v_source.get_image().unwrap();
+        let mut frame = f_source.get_image().unwrap();
 
         if frame.size()?.width > 0 {
             highgui::imshow(window, &mut frame)?;

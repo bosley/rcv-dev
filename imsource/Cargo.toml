@@ -1,0 +1,10 @@
+[package]
+name = "imsource"
+version = "0.1.0"
+authors = ["bosley <bosley117@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+
+opencv = "0.46"
+derive_more = "0.99.11"
