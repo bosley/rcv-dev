@@ -17,7 +17,10 @@ use imsource::image_source::*;
 use imsource::image_source::ImageSource;
 
 mod contour;
-use contour::Contour;
+use contour::{
+    Point,
+    Contour
+};
 
 fn main() -> opencv::Result<()> {
 
@@ -45,22 +48,22 @@ fn main() -> opencv::Result<()> {
     };
 
     let window = "basic contour";
-    let sobel_window = "sobel";
+ //   let sobel_window = "sobel";
 
     highgui::named_window(window, 1)?;
-    highgui::named_window(sobel_window, 1)?;
+  //  highgui::named_window(sobel_window, 1)?;
 
     let contour = Arc::new(Mutex::new(Contour::new()));
 
     let (mut alpha, mut beta, mut gamma) = contour.lock().unwrap().get_params();
 
-    let mut sobel_delta = 0;
+    let sobel_delta = 100;
 
     let _ = highgui::create_trackbar("alpha", window, &mut alpha, 100, None);
     let _ = highgui::create_trackbar("beta",  window, &mut beta,  100, None);
     let _ = highgui::create_trackbar("gamma", window, &mut gamma, 100, None);
 
-    let _ = highgui::create_trackbar("s delta", window, &mut sobel_delta, 100, None);
+   // let _ = highgui::create_trackbar("s delta", window, &mut sobel_delta, 100, None);
 
     highgui::set_mouse_callback(window, Some(Box::new({
 
@@ -82,6 +85,8 @@ fn main() -> opencv::Result<()> {
         }
     })))?;
 
+    let mut points : Vec<Point> = Vec::new();
+
     'execution : loop {
         let mut frame = f_source.get_image().unwrap();
         let mut gray  = core::Mat::default()?;
@@ -98,7 +103,7 @@ fn main() -> opencv::Result<()> {
 
         imgproc::sobel(&gray, &mut sobel_image, 0, 1, 1, 3, 1.0, sobel_delta as f64, 0).unwrap();
 
-        highgui::imshow(sobel_window, &sobel_image)?;
+    //    highgui::imshow(sobel_window, &sobel_image)?;
 
         match contour.lock() {
             Ok(mut contour_inner)  => {
@@ -106,11 +111,31 @@ fn main() -> opencv::Result<()> {
                    contour_inner.update_beta(beta);
                    contour_inner.update_gamma(gamma);
                    contour_inner.step(&mut sobel_image);
+                   points = contour_inner.get_points();
             },
             Err(_) => {}
         };
 
         if frame.size()?.width > 0 {
+
+            // Draw points
+            for point in points.iter() {
+                imgproc::circle(&mut frame, core::Point{ x: point.x, y: point.y}, 2, core::Scalar::new(0., 0., 255., 0.), 3, 1, 0)?;
+            }
+
+            // Draw lines
+            if points.len() > 0 {
+                for x in 0..points.len()-1 {
+                    imgproc::line(&mut frame, core::Point{ x: points[x].x, y: points[x].y}, 
+                                            core::Point{ x: points[x+1].x, y: points[x+1].y}, 
+                                            core::Scalar::new(0., 255., 0., 0.), 2, 2, 0)?;
+                }
+                imgproc::line(&mut frame, core::Point{ x: points[0].x, y: points[0].y}, 
+                    core::Point{ x: points[points.len()-1].x, y: points[points.len()-1].y}, 
+                    core::Scalar::new(0., 255., 0., 0.), 2, 2, 0)?;
+            }
+
+            // Draw show image
             highgui::imshow(window, &mut frame)?;
         }
         

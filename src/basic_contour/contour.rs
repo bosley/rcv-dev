@@ -3,16 +3,17 @@ use opencv::{
     prelude::{
         Mat,
         MatTrait
-    },
-    imgproc,
-    core
+    }
 };
 
+use std::os::raw::c_uchar;
 
+#[derive(Copy, Clone)]
 pub struct Point {
     pub x: i32,
     pub y: i32
 }
+
 
 enum State {
     AcceptingInput,
@@ -42,6 +43,10 @@ impl Contour {
 
     pub fn get_params(&self) -> (i32, i32, i32) {
         ((self.alpha * 100.00) as i32, self.beta, self.gamma)
+    }
+
+    pub fn get_points(&self) -> Vec<Point> {
+        self.points.clone()
     }
 
     pub fn update_alpha(&mut self, alpha: i32) {
@@ -99,8 +104,9 @@ impl Contour {
         let height = sobel_image.rows();
         let width  = sobel_image.cols();
 
-        let mut idx: u64 = 0;
-        for point in self.points.iter_mut() {
+        let mut idx: usize = 0;
+
+        for point in self.points.clone().iter() {
 
             let mut start = Point{ x: 0, y: 0 };
             let mut end   = Point{ x: 0, y: 0 };
@@ -125,13 +131,12 @@ impl Contour {
                 end.y = point.y + 4;
             }
 
-            let np = self.calculate_new_pos(idx, start, end);
+            let np = self.calculate_new_pos(sobel_image, idx, start, end);
 
-            point.x = np.x; point.y = np.y;
+            self.points[idx] = np;
 
             idx = idx + 1;
         }
-
     }
 
     fn average_distance(&mut self) -> f32 {
@@ -151,9 +156,130 @@ impl Contour {
         return sum / self.points.len() as f32;
     }
 
-    fn calculate_new_pos(&self, idx: u64, start: Point, end: Point ) -> Point {
+    fn calculate_new_pos(&mut self, img: &mut Mat, idx: usize, start: Point, end: Point ) -> Point {
 
+        let cols = end.x - start.x;
+        let rows = end.y - start.y;
 
-        Point{ x: 0, y: 0}
+        let mut location = self.points[idx].clone();
+
+        let mut flag = true;
+        let mut local_min = 1000.00;
+
+        let average_distance = self.average_distance();
+
+        let mut ngmax: i32 = 0;
+        let mut ngmin: i32 = 0;
+
+        for y in 0..rows {
+            for x in 0..cols {
+
+                let cval = *img.at_2d::<c_uchar>(y, x).unwrap() as i32;
+
+                if flag {
+                    ngmax = cval;
+                    ngmin = cval;
+                    flag = false;
+                } else if cval > ngmax {
+                    ngmax = cval;
+                } else if cval < ngmin {
+                    ngmin = cval;
+                }
+            }
+        }
+
+        if ngmax == 0 {
+            ngmax = 1;
+        }
+        if ngmin == 0 {
+            ngmin = 1;
+        }
+
+        flag = true;
+
+        for y in 0..rows-1 {
+            for x in 0..cols-1 {
+
+                // E = ∫(α(s)Econt + β(s)Ecurv + γ(s)Eimage)ds
+
+                let mut parent_x = x + start.x;
+                let mut parent_y = y + start.y;
+
+                let height = img.rows();
+                let width  = img.cols();
+
+                if parent_x >= width {
+                    parent_x = width-1;
+                }
+
+                if parent_y >= height {
+                    parent_y = height-1;
+                }
+
+                // Econt
+                // (δ- (x[i] - x[i-1]) + (y[i] - y[i-1]))^2
+                // δ = avg dist between snake points
+
+                let previous_point : Point;
+
+                if idx == 0 {
+                    previous_point = self.points[idx].clone();
+                } else {
+                    previous_point = self.points[idx-1].clone();
+                }
+
+                // Econt
+                let mut econt = ( (parent_x - previous_point.x) + (parent_y - previous_point.y) )as f32;
+                econt = (econt as i64).pow(2) as f32;
+                econt = average_distance - econt;
+                econt = econt * self.alpha;
+
+                // Ecurv
+                // (x[i-1] - 2x[i] + x[i+1])^2 + (y[i-1] - 2y[i] + y[i+1])^2
+
+                let next_point : Point;
+                if idx == self.points.len()-1 {
+                    next_point = self.points[0].clone();
+                } else {
+                    next_point = self.points[idx+1].clone();
+                }
+
+                let mut ecurv = (previous_point.x - (parent_x * 2) + next_point.x).pow(2) as f32;
+                ecurv = ecurv + (previous_point.y - (parent_y * 2) + next_point.y).pow(2) as f32;
+                ecurv = ecurv * self.beta as f32;
+
+                // Eimage
+                // -||∇||
+
+                let mut eimg = *img.at_2d::<c_uchar>(parent_y, parent_x).unwrap() as i32;
+                eimg = eimg * self.gamma;
+
+                // Normalize
+
+                econt = econt / ngmax as f32;
+                ecurv = ecurv / ngmax as f32;
+
+                let mut divisor = ngmax - ngmin;
+                if divisor <= 0 {
+                    divisor = 1;
+                }
+
+                eimg = (eimg - ngmin) / divisor;
+
+                // Energy = ∫(α(s)Econt + β(s)Ecurv + γ(s)Eimage)ds
+                let energy = econt + ecurv + eimg as f32;
+
+                if flag {
+                    flag = false;
+                    local_min = energy;
+                    location  = Point{ x: parent_x, y: parent_y};
+                } else if energy < local_min {
+                    local_min = energy;
+                    location  = Point{ x: parent_x, y: parent_y};
+                }
+            }
+        }
+
+        return location;
     }
 }
