@@ -20,4 +20,4 @@ path = "src/basic_contour/main.rs"
 clap = "2.33.3"
 
 opencv = "0.46"
-imsource = { path = "./imsource" }
+imsource   = { path = "./imsource" }
